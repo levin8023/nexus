@@ -1,0 +1,19 @@
+ext {
+    MAVEN_PUBLIC_REPOSITORY_URL = "http://localhost:8000/nexus/repository/maven-public/"
+    ALLOW_INSECURE_PROTOCOL_GRADLE_VERSION = "7.0.0"
+}
+
+allprojects {
+    repositories {
+        maven {
+            if (gradle.gradleVersion >= ALLOW_INSECURE_PROTOCOL_GRADLE_VERSION) {
+                allowInsecureProtocol(true)
+            }
+            url(MAVEN_PUBLIC_REPOSITORY_URL)
+        }
+    }
+    configurations.all {
+       resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+    }
+
+}

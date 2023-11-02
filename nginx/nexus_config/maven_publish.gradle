@@ -1,0 +1,103 @@
+import java.text.SimpleDateFormat
+
+ext {
+    MAVEN_RELEASES_REPOSITORY_URL = "http://localhost:8000/nexus/repository/maven-releases/"
+    MAVEN_SNAPSHOTS_REPOSITORY_URL = "http://localhost:8000/nexus/repository/maven-snapshots/"
+    SNAPSHOT_SUFFIX = "-SNAPSHOT"
+    GROUP_PREFIX = "io.github.ethereal-collection"
+    ALLOW_INSECURE_PROTOCOL_GRADLE_VERSION = "7.0.0"
+    NEXUS_USERNAME = System.getenv("ORG_GRADLE_PROJECT_nexusUsername")
+    NEXUS_PASSWORD = System.getenv("ORG_GRADLE_PROJECT_nexusPassword")
+}
+
+apply plugin: 'java-library'
+apply plugin: 'maven-publish'
+
+task sourcesJar(type: Jar) {
+    baseName project.name
+    classifier = 'sources'
+    from sourceSets.main.allJava
+}
+
+task javadocJar(type: Jar) {
+    baseName project.name
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+jar {
+    manifest {
+        attributes(
+                'Implementation-Version': project.version,
+                'Implementation-Title': project.group + ':' + project.name,
+                'Built-By': NEXUS_USERNAME ? NEXUS_USERNAME : 'Null',
+                'Build-Date': new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ").format(new Date()),
+                'Created-By': "Gradle ${gradle.gradleVersion}",
+                'Build-Jdk': "${System.properties['java.version']} (${System.properties['java.vendor']} ${System.properties['java.vm.version']})",
+                'Build-OS': "${System.properties['os.name']} ${System.properties['os.arch']} ${System.properties['os.version']}"
+        )
+    }
+    baseName project.name
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId(project.group ? project.group : GROUP_PREFIX)
+            artifactId project.name
+            version project.version
+            from components.java
+            artifact sourcesJar
+            artifact javadocJar
+        }
+    }
+    repositories {
+        maven {
+            name("nexus")
+            if (gradle.gradleVersion >= ALLOW_INSECURE_PROTOCOL_GRADLE_VERSION) {
+                allowInsecureProtocol(true)
+            }
+            if (gradle.gradleVersion < "6.0") {
+                credentials {
+                    username(NEXUS_USERNAME)
+                    password(NEXUS_PASSWORD)
+                }
+            } else {
+                credentials(PasswordCredentials)
+            }
+            println "project.group: ${project.group}"
+            println "project.name: ${project.name}"
+            println "project.version: ${project.version}"
+            boolean snapshotVersion = project.version.endsWith(SNAPSHOT_SUFFIX)
+            def publishUrl = snapshotVersion ?
+                    MAVEN_SNAPSHOTS_REPOSITORY_URL : MAVEN_RELEASES_REPOSITORY_URL
+            url(publishUrl)
+        }
+    }
+}
+
+
+task checkSnapshotDependencies() {
+    doLast {
+        if (project.version.endsWith(SNAPSHOT_SUFFIX)) {
+            println "project.version: ${project.version}, skip checkSnapshotDependencies"
+            return
+        }
+        Collection snapshots = project.configurations
+                .findAll { it.canBeResolved }
+                .resolvedConfiguration.resolvedArtifacts.flatten()
+                .findAll { artifact ->
+                    def group = artifact.moduleVersion.id.group as String
+                    def version = artifact.moduleVersion.id.version as String
+                    group.startsWith(GROUP_PREFIX) && version.endsWith(SNAPSHOT_SUFFIX)
+                }.unique()
+
+        if (snapshots.size() > 0) {
+            throw new GradleException("can't publish this jar " +
+                    "of snapshot dependencies: " + snapshots as String)
+        }
+    }
+}
+
+publish.dependsOn clean
+// publish.dependsOn checkSnapshotDependencies

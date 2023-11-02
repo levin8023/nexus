@@ -1,0 +1,24 @@
+version: '3'
+services:
+  nexus:
+    image: 'sonatype/nexus3'
+    restart: 'always'
+    container_name: 'nexus'
+    volumes:
+      - ./nexus/data:/nexus-data
+    ports:
+      - '8081:8081'
+    environment:
+      TZ: Asia/Shanghai
+      NEXUS_CONTEXT: nexus
+
+  nginx:
+    container_name: 'nginx'
+    restart: 'always'
+    image: 'nginx'
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./nginx/conf/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/logs:/var/log/nginx
+      - ./nginx/nexus_config:/usr/share/nexus
